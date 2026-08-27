@@ -1,0 +1,19 @@
+# Executáveis compilados
+server
+client
+*.exe
+*.out
+*.class
+
+# Arquivos de depuração
+*.o
+*.log
+core
+core.*
+
+# Sistemas operacionais e editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
