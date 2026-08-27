@@ -1,156 +1,169 @@
 /*
  * Laboratório didático de sockets TCP.
  *
- * Este servidor aceita somente conexões locais (127.0.0.1) e executa uma
- * lista pequena de comandos demonstrativos. Ele NÃO é um backdoor real e
- * não deve ser alterado para uso em máquinas ou redes sem autorização.
+ * Este servidor aceita somente conexões locais (127.0.0.1) e executa comandos
+ * enviados pelo cliente para demonstrar a interação com o shell.
+ * NÃO use este exemplo em máquinas ou redes sem autorização.
  */
 
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 5050
-#define BUFFER_SIZE 4096
+#define IP_SERVIDOR "127.0.0.1"
+#define PORTA_SERVIDOR 5050
+#define TAMANHO_BUFFER 4096
 
-static int send_all(int fd, const char *data, size_t length)
+/* Garante que todos os bytes sejam enviados ao socket. */
+static int enviar_todos(int descritor, const char *dados, size_t tamanho)
 {
-    size_t sent = 0;
+    size_t enviados = 0;
 
-    while (sent < length)
-    {
-        ssize_t result = send(fd, data + sent, length - sent, 0);
-        if (result <= 0)
+    while (enviados < tamanho) {
+        ssize_t resultado = send(descritor, dados + enviados, tamanho - enviados, 0);
+        if (resultado <= 0)
             return -1;
-        sent += (size_t)result;
+        enviados += (size_t)resultado;
     }
 
     return 0;
 }
 
-static int execute_shell_command(const char *command, char *output, size_t output_size)
+/* Executa o texto recebido no shell local e captura a saída produzida. */
+static int executar_comando_shell(const char *comando, char *saida, size_t tamanho_saida)
 {
-    FILE *process;
-    size_t total = 0;
+    FILE *processo;
+    size_t total_lido = 0;
 
     /*
-     * Esta é a parte que demonstra a interação com o shell.
-     * O projeto está preso ao 127.0.0.1 e é somente para laboratório.
+     * Esta chamada existe para demonstrar o conceito da atividade.
+     * Em uma aplicação real, não se deve passar entrada de rede diretamente
+     * ao shell sem validação, autorização e isolamento.
      */
-    process = popen(command, "r");
-    if (process == NULL)
-        return snprintf(output, output_size, "Erro ao abrir o shell.\n");
+    processo = popen(comando, "r");
+    if (processo == NULL)
+        return snprintf(saida, tamanho_saida, "Erro ao abrir o shell.\n");
 
-    while (total < output_size - 1) {
-        size_t read_now = fread(output + total, 1, output_size - 1 - total, process);
-        total += read_now;
-        if (read_now == 0)
+    while (total_lido < tamanho_saida - 1) {
+        size_t lidos_agora = fread(saida + total_lido, 1,
+                                   tamanho_saida - 1 - total_lido, processo);
+        total_lido += lidos_agora;
+        if (lidos_agora == 0)
             break;
     }
 
-    output[total] = '\0';
-    pclose(process);
-    return (int)total;
+    saida[total_lido] = '\0';
+    pclose(processo);
+    return (int)total_lido;
 }
 
-static void handle_client(int client_fd)
+/* Recebe um comando por linha e devolve a saída correspondente ao cliente. */
+static void atender_cliente(int descritor_cliente)
 {
-    char buffer[BUFFER_SIZE];
-    char output[BUFFER_SIZE];
-    ssize_t received;
-    size_t position;
+    char buffer[TAMANHO_BUFFER];
+    char saida[TAMANHO_BUFFER];
+    ssize_t recebido;
+    size_t posicao;
+    const char *mensagem_inicial =
+        "Laboratorio de Seguranca com Sockets TCP\n"
+        "Digite um comando Linux ou quit para sair.\n> ";
 
-    send_all(client_fd,
-             "StockFlow Security Lab\nComandos: help, pwd, date, uname, ls, quit\n> ",
-             strlen("StockFlow Security Lab\nComandos: help, pwd, date, uname, ls, quit\n> "));
+    enviar_todos(descritor_cliente, mensagem_inicial, strlen(mensagem_inicial));
 
     while (1) {
-        position = 0;
-        while (position < sizeof(buffer) - 1) {
-            received = recv(client_fd, buffer + position, 1, 0);
-            if (received <= 0)
+        posicao = 0;
+
+        /* TCP e um fluxo de bytes; aqui usamos '\n' como fim da mensagem. */
+        while (posicao < sizeof(buffer) - 1) {
+            recebido = recv(descritor_cliente, buffer + posicao, 1, 0);
+            if (recebido <= 0)
                 return;
-            if (buffer[position] == '\n')
+            if (buffer[posicao] == '\n')
                 break;
-            position++;
+            posicao++;
         }
 
-        buffer[position] = '\0';
+        buffer[posicao] = '\0';
         buffer[strcspn(buffer, "\r")] = '\0';
 
         if (strcmp(buffer, "quit") == 0 || strcmp(buffer, "exit") == 0) {
-            const char *message = "Conexao encerrada pelo cliente.\n";
-            send_all(client_fd, message, strlen(message));
+            const char *mensagem = "Conexao encerrada pelo cliente.\n";
+            enviar_todos(descritor_cliente, mensagem, strlen(mensagem));
             break;
         }
 
         if (strcmp(buffer, "help") == 0) {
-            const char *help = "Digite um comando Linux para o laboratorio ou quit para sair.\n";
-            send_all(client_fd, help, strlen(help));
+            const char *ajuda =
+                "Exemplos: pwd, date, uname -a, ls, help e quit.\n";
+            enviar_todos(descritor_cliente, ajuda, strlen(ajuda));
         } else {
-            int size = execute_shell_command(buffer, output, sizeof(output));
-            if (size > 0)
-                send_all(client_fd, output, (size_t)size);
+            int tamanho_saida = executar_comando_shell(
+                buffer, saida, sizeof(saida));
+            if (tamanho_saida > 0)
+                enviar_todos(descritor_cliente, saida, (size_t)tamanho_saida);
         }
 
-        send_all(client_fd, "> ", 2);
+        enviar_todos(descritor_cliente, "> ", 2);
     }
 }
 
 int main(void)
 {
-    int server_fd;
-    int client_fd;
-    int option = 1;
-    struct sockaddr_in address;
-    socklen_t address_length = sizeof(address);
+    int descritor_servidor;
+    int descritor_cliente;
+    int reutilizar_endereco = 1;
+    struct sockaddr_in endereco;
+    socklen_t tamanho_endereco = sizeof(endereco);
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd == -1) {
+    descritor_servidor = socket(AF_INET, SOCK_STREAM, 0);
+    if (descritor_servidor == -1) {
         perror("socket");
         return EXIT_FAILURE;
     }
 
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    setsockopt(descritor_servidor, SOL_SOCKET, SO_REUSEADDR,
+               &reutilizar_endereco, sizeof(reutilizar_endereco));
 
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_port = htons(SERVER_PORT);
-    inet_pton(AF_INET, SERVER_IP, &address.sin_addr);
+    memset(&endereco, 0, sizeof(endereco));
+    endereco.sin_family = AF_INET;
+    endereco.sin_port = htons(PORTA_SERVIDOR);
+    inet_pton(AF_INET, IP_SERVIDOR, &endereco.sin_addr);
 
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) == -1) {
+    if (bind(descritor_servidor, (struct sockaddr *)&endereco,
+             sizeof(endereco)) == -1) {
         perror("bind");
-        close(server_fd);
+        close(descritor_servidor);
         return EXIT_FAILURE;
     }
 
-    if (listen(server_fd, 1) == -1) {
+    if (listen(descritor_servidor, 1) == -1) {
         perror("listen");
-        close(server_fd);
+        close(descritor_servidor);
         return EXIT_FAILURE;
     }
 
-    printf("Servidor ouvindo somente em %s:%d\n", SERVER_IP, SERVER_PORT);
+    printf("Servidor ouvindo somente em %s:%d\n",
+           IP_SERVIDOR, PORTA_SERVIDOR);
     printf("Aguardando cliente...\n");
 
-    client_fd = accept(server_fd, (struct sockaddr *)&address, &address_length);
-    if (client_fd == -1) {
+    descritor_cliente = accept(descritor_servidor,
+                               (struct sockaddr *)&endereco,
+                               &tamanho_endereco);
+    if (descritor_cliente == -1) {
         perror("accept");
-        close(server_fd);
+        close(descritor_servidor);
         return EXIT_FAILURE;
     }
 
     printf("Cliente conectado.\n");
-    handle_client(client_fd);
-    close(client_fd);
-    close(server_fd);
+    atender_cliente(descritor_cliente);
+    close(descritor_cliente);
+    close(descritor_servidor);
     printf("Servidor encerrado.\n");
     return EXIT_SUCCESS;
 }

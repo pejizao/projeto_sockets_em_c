@@ -12,7 +12,6 @@ A execução no shell foi mantida para representar o conceito solicitado na ativ
 
 ## 2. Estrutura
 
-O arquivo `GUIA-DE-ESTUDO.md` explica a linha de desenvolvimento do laboratório, as funções de socket, o caminho dos dados e as perguntas para revisar o conteúdo.
 
 ```text
 lab-sockets-c/
@@ -22,7 +21,6 @@ lab-sockets-c/
 ├── .gitignore
 ├── LICENSE
 ├── README.md
-├── GUIA-DE-ESTUDO.md
 ```
 
 ## 3. Pré-requisitos

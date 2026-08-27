@@ -11,84 +11,91 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 5050
-#define BUFFER_SIZE 4096
+#define IP_SERVIDOR "127.0.0.1"
+#define PORTA_SERVIDOR 5050
+#define TAMANHO_BUFFER 4096
 
-static int send_all(int fd, const char *data, size_t length)
+/* Garante que todos os bytes sejam enviados ao socket. */
+static int enviar_todos(int descritor, const char *dados, size_t tamanho)
 {
-    size_t sent = 0;
+    size_t enviados = 0;
 
-    while (sent < length) {
-        ssize_t result = send(fd, data + sent, length - sent, 0);
-        if (result <= 0)
+    while (enviados < tamanho) {
+        ssize_t resultado = send(descritor, dados + enviados,
+                                 tamanho - enviados, 0);
+        if (resultado <= 0)
             return -1;
-        sent += (size_t)result;
+        enviados += (size_t)resultado;
     }
 
     return 0;
 }
 
-static int receive_until_prompt(int fd, char *buffer, size_t buffer_size)
+/* Lê a resposta até encontrar o prompt enviado pelo servidor. */
+static int receber_ate_prompt(int descritor, char *buffer, size_t tamanho_buffer)
 {
-    size_t position = 0;
-    char previous = '\0';
-    char current;
+    size_t posicao = 0;
+    char caractere_anterior = '\0';
+    char caractere_atual;
 
-    while (position < buffer_size - 1) {
-        ssize_t received = recv(fd, &current, 1, 0);
-        if (received <= 0)
+    while (posicao < tamanho_buffer - 1) {
+        ssize_t recebido = recv(descritor, &caractere_atual, 1, 0);
+        if (recebido <= 0)
             return -1;
 
-        buffer[position++] = current;
-        buffer[position] = '\0';
+        buffer[posicao++] = caractere_atual;
+        buffer[posicao] = '\0';
 
-        if (previous == '>' && current == ' ')
+        if (caractere_anterior == '>' && caractere_atual == ' ')
             return 0;
-        previous = current;
+        caractere_anterior = caractere_atual;
     }
 
-    buffer[buffer_size - 1] = '\0';
+    buffer[tamanho_buffer - 1] = '\0';
     return 0;
 }
 
 int main(void)
 {
-    int client_fd;
-    struct sockaddr_in server_address;
-    char buffer[BUFFER_SIZE];
+    int descritor_cliente;
+    struct sockaddr_in endereco_servidor;
+    char buffer[TAMANHO_BUFFER];
 
-    client_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (client_fd == -1) {
+    descritor_cliente = socket(AF_INET, SOCK_STREAM, 0);
+    if (descritor_cliente == -1) {
         perror("socket");
         return EXIT_FAILURE;
     }
 
-    memset(&server_address, 0, sizeof(server_address));
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(SERVER_PORT);
-    inet_pton(AF_INET, SERVER_IP, &server_address.sin_addr);
+    memset(&endereco_servidor, 0, sizeof(endereco_servidor));
+    endereco_servidor.sin_family = AF_INET;
+    endereco_servidor.sin_port = htons(PORTA_SERVIDOR);
+    inet_pton(AF_INET, IP_SERVIDOR, &endereco_servidor.sin_addr);
 
-    if (connect(client_fd, (struct sockaddr *)&server_address, sizeof(server_address)) == -1) {
+    if (connect(descritor_cliente,
+                (struct sockaddr *)&endereco_servidor,
+                sizeof(endereco_servidor)) == -1) {
         perror("connect");
-        close(client_fd);
+        close(descritor_cliente);
         return EXIT_FAILURE;
     }
 
-    while (receive_until_prompt(client_fd, buffer, sizeof(buffer)) == 0) {
+    while (receber_ate_prompt(descritor_cliente,
+                              buffer, sizeof(buffer)) == 0) {
         printf("%s", buffer);
         fflush(stdout);
 
         if (fgets(buffer, sizeof(buffer), stdin) == NULL)
             break;
 
-        if (send_all(client_fd, buffer, strlen(buffer)) == -1)
+        if (enviar_todos(descritor_cliente, buffer, strlen(buffer)) == -1)
             break;
 
-        if (strncmp(buffer, "quit", 4) == 0 || strncmp(buffer, "exit", 4) == 0)
+        if (strncmp(buffer, "quit", 4) == 0 ||
+            strncmp(buffer, "exit", 4) == 0)
             break;
     }
 
-    close(client_fd);
+    close(descritor_cliente);
     return EXIT_SUCCESS;
 }
