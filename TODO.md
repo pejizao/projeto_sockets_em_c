@@ -1,4 +1,4 @@
-- [ ] Confirmar nome e visibilidade do repositório GitHub
-- [ ] Criar o repositório no GitHub autenticado
-- [ ] Enviar a estrutura completa do laboratório para o repositório
-- [ ] Verificar os arquivos publicados e entregar o link
+- [x] Confirmar nome e visibilidade do repositório GitHub
+- [x] Criar o repositório no GitHub autenticado
+- [x] Enviar a estrutura completa do laboratório para o repositório
+- [x] Verificar os arquivos publicados e entregar o link
